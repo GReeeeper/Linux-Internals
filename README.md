@@ -78,7 +78,10 @@ cat /etc/shadow
 ---
 
 ## 📸 Screenshots
-<img width="703" height="515" alt="image" src="https://github.com/user-attachments/assets/63362139-e4de-4a9a-9104-adcd194c9835" />
+<img width="699" height="630" alt="image" src="https://github.com/user-attachments/assets/e7a6d7ba-690a-40cc-bab8-b1807b2c7e35" />
+<img width="704" height="627" alt="image" src="https://github.com/user-attachments/assets/81aaf6ae-dc16-4c5c-963a-462a52c0947c" />
+
+
 
 
 
