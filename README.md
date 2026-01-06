@@ -75,5 +75,12 @@ cat /etc/shadow
 
 ---
 
+## 📸 Screenshots
+<img width="703" height="515" alt="image" src="https://github.com/user-attachments/assets/63362139-e4de-4a9a-9104-adcd194c9835" />
+
+
+
+---
+
 ## ⚠️ Legal & Ethics
 This tool interacts with the Linux Kernel. Improper modification of BPF code can cause system instability (Kernel Panics). Use in a controlled environment.
