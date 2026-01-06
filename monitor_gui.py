@@ -15,7 +15,7 @@ class SentinelApp:
     def __init__(self, root):
         self.root = root
         self.root.title("KERNEL SENTINEL // eBPF MONITOR")
-        self.root.geometry("700x500")
+        self.root.geometry("700x600")
         self.root.configure(bg="#050505")
 
         # 1. Enforce Root Immediately
@@ -30,7 +30,7 @@ class SentinelApp:
         frame_log = tk.Frame(root, bg="#111", padx=5, pady=5)
         frame_log.pack(fill=tk.BOTH, expand=True, padx=20)
         
-        self.log_area = scrolledtext.ScrolledText(frame_log, width=80, height=20, 
+        self.log_area = scrolledtext.ScrolledText(frame_log, width=80, height=15, 
                                                   bg="#000000", fg="#00cc00", font=("Consolas", 10),
                                                   insertbackground="#00ff00", borderwidth=0)
         self.log_area.pack(fill=tk.BOTH, expand=True)
@@ -39,7 +39,12 @@ class SentinelApp:
         # Unload Button
         self.btn_quit = tk.Button(root, text="[ DEACTIVATE PROBE ]", command=self.shutdown, 
                                   bg="#440000", fg="#ffaaaa", font=("Consolas", 11, "bold"), relief=tk.FLAT)
-        self.btn_quit.pack(pady=20, ipadx=10)
+        self.btn_quit.pack(pady=5, ipadx=10)
+
+        # Simulation Button (For Demo)
+        self.btn_sim = tk.Button(root, text="[ SIMULATE THREAT ]", command=self.simulate_threat,
+                                 bg="#333", fg="yellow", font=("Consolas", 10, "bold"), relief=tk.FLAT)
+        self.btn_sim.pack(pady=10, ipadx=10)
 
         # State
         self.running = True
@@ -99,6 +104,12 @@ class SentinelApp:
         btn = tk.Button(alert, text="ACKNOWLEDGE", command=alert.destroy, bg="red", fg="white", font=("Consolas", 12))
         btn.pack(pady=20)
 
+
+    def simulate_threat(self):
+        # Trigger a fake network alert
+        self.handle_network_alert("[NETWORK] INBOUND ncat 3232235876:4444") 
+        self.log("[TEST] Simulated Inbound Connection from 192.168.1.100")
+
     def reset_alert(self):
         self.root.configure(bg="#050505")
         self.header.configure(bg="#050505", fg="#00ff00", text="::: KERNEL SENTINEL ACTIVE :::")
@@ -149,7 +160,7 @@ class SentinelApp:
                 # 1. INBOUND from outside (checking if IP is not 127.0.0.1 which eBPF filters, but let's be safe)
                 # 2. OUTBOUND from suspicious process
                 
-                is_suspicious_proc = comm in ["ncat", "nmap", "nc", "bash", "python"]
+                is_suspicious_proc = comm in ["ncat", "nmap", "nc", "bash", "python", "python3", "curl", "wget"]
                 
                 if direction == "INBOUND" or is_suspicious_proc:
                      self.root.after(0, lambda: self.show_blocking_prompt(direction, comm, ip_str))
