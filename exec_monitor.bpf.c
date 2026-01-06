@@ -117,6 +117,9 @@ int BPF_KPROBE(kprobe_execveat, struct pt_regs *regs)
     bpf_probe_read_user_str(&fname, sizeof(fname), filename_ptr);
     
     check_malicious(fname);
+    return 0;
+}
+
 // 3. Hook for openat (File Access)
 // __x64_sys_openat(int dfd, const char *filename, int flags, umode_t mode)
 // Args: di, si, dx, r10
@@ -140,6 +143,75 @@ int BPF_KPROBE(kprobe_openat, struct pt_regs *regs)
          // Let's just flag all access for now as "Suspicious"
          bpf_printk("[ALERT] Sensitive File Access (/etc/passwd): %s\n", fname);
     }
+    
+    return 0;
+}
+
+// Helper to extract IP and Port from struct sock
+static __always_inline void log_network(struct sock *sk, const char *direction) {
+    u32 saddr, daddr;
+    u16 sport, dport;
+    
+    // Read IPv4 addresses and ports (CO-RE)
+    // In vmlinux.h, these might be in __sk_common
+    bpf_probe_read_kernel(&saddr, sizeof(saddr), &sk->__sk_common.skc_rcv_saddr);
+    bpf_probe_read_kernel(&daddr, sizeof(daddr), &sk->__sk_common.skc_daddr);
+    bpf_probe_read_kernel(&dport, sizeof(dport), &sk->__sk_common.skc_dport);
+    
+    // ntohs calculation (simple version for BE to LE)
+    u16 dport_h = ((dport & 0xff00) >> 8) | ((dport & 0x00ff) << 8);
+
+    // Filter loopback (127.0.0.1 = 0x0100007F in LE, or just check 127.x.x.x)
+    // 127.0.0.1 is 16777343 decimal (0x0100007F)
+    if (daddr == 0x0100007F) return; 
+
+    // Extract PID/COMM
+    char comm[16];
+    bpf_get_current_comm(&comm, sizeof(comm));
+    
+    // Alert format: [NETWORK] DIR PID COMM IP:PORT
+    // We print raw Int IP for Python to decode, easier in C
+    bpf_printk("[NETWORK] %s %s %u %x:%d\n", direction, comm, daddr, dport_h);
+}
+
+// 4. Hook for Outbound Connections
+// int tcp_connect(struct sock *sk, struct sk_buff *buff, struct flowi *uaddr)
+SEC("kprobe/tcp_connect")
+int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk)
+{
+    log_network(sk, "OUTBOUND");
+    return 0;
+}
+
+// 5. Hook for Inbound Connections
+// struct sock *inet_csk_accept(struct sock *sk, int flags, int *err, bool kern)
+// We need kretprobe to get the *new* socket (the return value) which represents the accepted connection
+SEC("kretprobe/inet_csk_accept")
+int BPF_KRETPROBE(kretprobe_inet_csk_accept, struct sock *newsk)
+{
+    if (newsk == NULL) return 0;
+    
+    // For inbound, the 'daddr' in the socket is US, and 'saddr' is THEM (Remote).
+    // We want to log the REMOTE IP.
+    
+    u32 remote_ip;
+    u16 remote_port;
+    
+    // In an accepted socket, rcv_saddr is us, daddr is remote (usually).
+    // Let's check skc_daddr (Foreign IPv4)
+    bpf_probe_read_kernel(&remote_ip, sizeof(remote_ip), &newsk->__sk_common.skc_daddr);
+    bpf_probe_read_kernel(&remote_port, sizeof(remote_port), &newsk->__sk_common.skc_dport);
+    
+    u16 remote_port_h = ((remote_port & 0xff00) >> 8) | ((remote_port & 0x00ff) << 8);
+    
+    // Filter loopback
+    if (remote_ip == 0x0100007F) return 0;
+
+    char comm[16];
+    bpf_get_current_comm(&comm, sizeof(comm));
+    
+    // Format: [NETWORK] INBOUND COMM REMOTE_IP:PORT
+    bpf_printk("[NETWORK] INBOUND %s %x:%d\n", comm, remote_ip, remote_port_h);
     
     return 0;
 }

@@ -39,7 +39,7 @@ class SentinelApp:
         # Unload Button
         self.btn_quit = tk.Button(root, text="[ DEACTIVATE PROBE ]", command=self.shutdown, 
                                   bg="#440000", fg="#ffaaaa", font=("Consolas", 11, "bold"), relief=tk.FLAT)
-        self.btn_quit.pack(pady=20, iPadx=10)
+        self.btn_quit.pack(pady=20, ipadx=10)
 
         # State
         self.running = True
@@ -104,7 +104,7 @@ class SentinelApp:
         self.header.configure(bg="#050505", fg="#00ff00", text="::: KERNEL SENTINEL ACTIVE :::")
 
     def monitor_loop(self):
-        self.log("[*] Monitoring Trace Pipe...")
+        self.log("[*] Monitoring Trace Pipe for Network & Process Events...")
         try:
             with open(TRACE_PIPE, "r") as f:
                 while self.running:
@@ -115,11 +115,79 @@ class SentinelApp:
                         parts = line.split("bpf_trace_printk:")
                         if len(parts) > 1:
                             content = parts[1].strip()
+                            
                             if "[ALERT]" in content:
                                 self.log(f"🚨 {content}")
                                 self.root.after(0, lambda m=content: self.show_alert(m))
+                            elif "[NETWORK]" in content:
+                                self.handle_network_alert(content)
+                                
         except Exception as e:
             self.log(f"[!] Monitor Error: {e}")
+
+    def handle_network_alert(self, msg):
+        # Format: [NETWORK] DIR COMM IP_INT:PORT
+        try:
+            parts = msg.split()
+            if len(parts) < 4: return
+            
+            direction = parts[1] # INBOUND or OUTBOUND
+            comm = parts[2]
+            ip_port = parts[3]
+            
+            if ":" in ip_port:
+                ip_int_str, port = ip_port.split(":")
+                
+                # Decode IP
+                import socket, struct
+                ip_str = socket.inet_ntoa(struct.pack("<I", int(ip_int_str)))
+                
+                log_msg = f"[NET] {direction} | {comm} | {ip_str}:{port}"
+                self.root.after(0, lambda: self.log(log_msg))
+
+                # Trigger Logic: 
+                # 1. INBOUND from outside (checking if IP is not 127.0.0.1 which eBPF filters, but let's be safe)
+                # 2. OUTBOUND from suspicious process
+                
+                is_suspicious_proc = comm in ["ncat", "nmap", "nc", "bash", "python"]
+                
+                if direction == "INBOUND" or is_suspicious_proc:
+                     self.root.after(0, lambda: self.show_blocking_prompt(direction, comm, ip_str))
+
+        except Exception as e:
+            print(f"Parse Error: {e}")
+
+    def show_blocking_prompt(self, direction, comm, ip):
+        top = tk.Toplevel(self.root)
+        top.title("⚠️ NETWORK INTRUSION DETECTED")
+        top.geometry("450x300")
+        top.configure(bg="#200000")
+        
+        tk.Label(top, text="!!! UNAUTHORIZED CONNECTION !!!", font=("Impact", 16), fg="red", bg="#200000").pack(pady=10)
+        
+        info = f"Direction: {direction}\nProcess: {comm}\nRemote IP: {ip}"
+        tk.Label(top, text=info, font=("Consolas", 12), fg="white", bg="#200000", justify=tk.LEFT).pack(pady=10)
+        
+        # Action Buttons
+        btn_frame = tk.Frame(top, bg="#200000")
+        btn_frame.pack(pady=20)
+        
+        tk.Button(btn_frame, text=f"[ BLOCK IP {ip} ]", bg="red", fg="white", font=("Consolas", 11, "bold"),
+                  command=lambda: self.block_ip(ip, top)).pack(side=tk.LEFT, padx=10)
+                  
+        tk.Button(btn_frame, text="[ ALLOW ]", bg="#333", fg="lime", font=("Consolas", 11, "bold"),
+                  command=top.destroy).pack(side=tk.LEFT, padx=10)
+
+    def block_ip(self, ip, window):
+        try:
+            # Execute iptables command
+            # sudo iptables -A INPUT -s IP -j DROP
+            subprocess.run(["iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"], check=True)
+            self.log(f"🛡️ [DEFENSE] BLOCKED IP PERMANENTLY: {ip}")
+            window.destroy()
+        except Exception as e:
+            self.log(f"[!] Start Monitor Error: {e}")
+            messagebox.showerror("Block Error", str(e))
 
     def shutdown(self):
         self.running = False

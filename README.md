@@ -15,14 +15,16 @@
 ## 🚀 Features
 
 ### 1. Kernel-Level Visibility (C/eBPF)
-*   **Syscall Hooking**: Uses `kprobe` to intercept `__x64_sys_execve` and `__x64_sys_openat`.
+*   **Syscall Monitor**: Intercepts `execve` (Process Execution) and `openat` (File Access).
+*   **Network Hooks**: Intercepts `tcp_connect` (Outbound) and `inet_csk_accept` (Inbound) to track every TCP connection.
 *   **Stealth Detection**: Detects malicious patterns *before* they return to user space.
-*   **Bypass Resistant**: Monitors the kernel trace pipe, bypassing standard user-space hook evasion techniques (like LD_PRELOAD).
 
-### 2. Detection Logic
-*   **Malicious Binaries**: Flags execution of recon tools (`nmap`, `ncat`, `whoami`, `tcpdump`).
-*   **File Integrity**: Alerts on access to sensitive files (`/etc/shadow`, `/etc/passwd`).
-*   **Rootkit Loading**: Detects `insmod` attempts (Kernel Module Loading).
+### 2. Detection & Active Defense
+*   **Malicious Binaries**: Flags execution of recon tools (`nmap`, `ncat`, `insmod`).
+*   **Intrusion Response**: 
+    *   **Inbound**: Detects external connections.
+    *   **Popup Alert**: Prompts user to **[ BLOCK IP ]** or **[ ALLOW ]**.
+    *   **Firewalling**: Automatically runs `iptables` to drop traffic from banned IPs.
 
 ### 3. Sentinel Dashboard (Python)
 *   **Visual Alerts**: A "Red Alert" popup system for critical intrusions.
